@@ -1,10 +1,15 @@
 import os
+import sys
 import serial
 import serial.rs485
 import struct
 import time
 import datetime
-import Queue
+is_py2 = sys.version[0] == '2'
+if is_py2:
+    import Queue as queue
+else:
+    import queue as queue
 from enum import Enum
 from threading import Thread
 
@@ -46,41 +51,37 @@ class pkt_src(Enum):
 def getmstime():
     return int(round(time.time() * 1000))
 
+def gen_logname(prefix = "dump+", endfix = ".csv"):
+    temp = str()
+    temp += prefix
+    now = datetime.datetime.now()
+    temp += now.strftime("%Y-%m-%d-%H-%M")
+    temp += endfix
+    return temp
 
-class interprerter:
-    self.pkt_src_str = [
-        'Unknown',
-        'RX',
-        'TX'
-    ]
-    self.pkt_description_table = [
-        'new packet',
-        'duplicated to'
-    ]
+def gen_description(dup_code, prev_code):
+    if dup_code is -1:
+        return "new packet"
+    if dup_code >= 0:
+        aaa = 'duplicated to'
+        temp = '%s N -% d' % aaa, prev_code
+        return temp
 
-    def gen_description(dup_code, prev_code):
-        if dup_code is -1:
-            return self.pkt_description_table[0]
-        if dup_code >= 0:
-            temp = '%s N -% d' % self.pkt_description_table[1], prev_code
-            return temp
-    
-    def gen_ev_str(dup_code, prev_code, hex_arr):
-        if dup_code is -1:
-            return '[!]'
-        if dup_code >= 0:
-            return '[+]'
+def gen_ev_str(dup_code, prev_code, hex_arr):
+    if dup_code is -1:
+        return '[!]'
+    if dup_code >= 0:
+        return '[+]'
     
 # todo : csv write order is strange curently, need to fix asap.
 
-
 class log_engine(Thread):
-    def __init__(self, filename = self.gen_logname(), duplicate_kill = 2, echo = True):
+    def __init__(self, filename = gen_logname(), duplicate_kill = 2, echo = True):
         if not os.path.exists('log'):
             os.makedirs('log')
         temp = './log/'
         temp += filename
-        self.file = open(filename, 'w')
+        self.file = open(temp, 'w')
         self.file.write(filename)
         self.file.write('\n')
         self.file.write('Ev,Len,Time Gap,Description,hex,ASCII')
@@ -107,6 +108,7 @@ class log_engine(Thread):
         t = -1
         for i in range (0, 100):
             if self.queue.empty() == False:
+                print('%d - exit failed' % i)
                 time.sleep(0.1)
             else:
                 t = 0
@@ -123,33 +125,34 @@ class log_engine(Thread):
         dup = int(-1)
         # for count n - 1 blahblah
         dup_sub = int(0)
-        for a in reversed range (0, self.dup_val):
+        for a in reversed (range (0, self.dup_val)):
             dup_sub += 1
             if len(self.dup_list) >= a:
                 continue
             if (self.dup_list[a] == temp_hex):
                 dup = a
                 break
+        
         if (len(self.dup_list) >= self.dup_val):
             del (self.dup_list[0])
         self.dup_list.append(temp_hex)
-        temp_desc = interprerter.gen_description(dup, dup_sub)
-        temp_ev = interprerter.gen_ev_str(dup,dup_sub, False)
-        log_write(temp_ev, temp[1] ,temp_desc, temp[3])
-        log_echo(temp_ev, temp[1] ,temp_desc, temp[3])
+        temp_desc = gen_description(dup, dup_sub)
+        temp_ev = gen_ev_str(dup,dup_sub, False)
+        self.log_write(temp_ev, temp[1] ,temp_desc, temp[3])
+        self.log_echo(temp_ev, temp[1] ,temp_desc, temp[3])
 
     def call(self, ev, desc, timegap, hex_bytes):
         while self.__lock == True:
             print("log_engine lock issue")
         # this should be fix to mutex
-        self.__lock = True:
+        self.__lock = True
         temp = []
         temp.append(ev)
         temp.append(timegap)
         temp.append(desc)
         temp.append(hex_bytes)
         self.queue.put(temp)
-        self.__lock = False:
+        self.__lock = False
 
     def log_write (self, ev, timegap, desc, hex_bytes):
         temp = str()
@@ -170,7 +173,7 @@ class log_engine(Thread):
             t += 1
         temp = ''
         blank = ' '
-        for in i range (0, t):
+        for i in range (0, t):
             if (i+1)*16 <= size:
                 d = 16
             else:
@@ -185,16 +188,8 @@ class log_engine(Thread):
                 temp = temp + '% 43s % 24s % 8s\n' % blank, temp_hex, temp_ascii
         print(temp, end='')
 
-    def gen_logname(self, prefix = "dump+", endfix = ".csv"):
-        temp = str()
-        temp += prefix
-        now = datetime.datetime.now()
-        temp += now.strftime("%Y-%m-%d-%H-%M")
-        temp += endfix
-        return temp
-
     def __del__(self):
-        file.close()
+        self.file.close()
 
 
 class app(Thread):
@@ -227,9 +222,10 @@ class app(Thread):
             self.logger.start()
             print("log_engine enabled")
             time.sleep(0.1)
-    
+        Thread.__init__(self)
+
     def run(self):
-        whlie True:
+        while True:
             self.basic_work()
             if self.__exit is True:
                 break
@@ -270,19 +266,16 @@ class app(Thread):
             temp += ch
         return temp
 
-    def basic_work(self)
-        a = program.read_packet()
+    def basic_work(self):
+        a = self.read_packet()
         if len(a) != 0:
-                dy = getmstime()
-                __timegap = dy-self.dt
-                if self.policy_logger == True:
-                    self.logger.call(ev=0, desc=0, timegap=__timegap, )
-                self.dt = dy
+            dy = getmstime()
+            __timegap = dy-self.dt
+            if self.policy_logger == True:
+                self.logger.call(ev=0, desc=0, timegap=__timegap, hex_bytes=a)
+            self.dt = dy
 
 
-    def run(self, packet):
-        if self.policy_logger == True:
-            self.logger.call(ev=0, desc=0, )
 
 
 
@@ -292,7 +285,7 @@ def main():
     program.start()
     while True:
         key = input('')
-        if key = 'q':
+        if key is 'q':
             break
     program.exit()
 
