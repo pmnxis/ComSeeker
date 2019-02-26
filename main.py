@@ -64,7 +64,7 @@ def gen_description(dup_code, prev_code):
         return "new packet"
     if dup_code >= 0:
         aaa = 'duplicated to'
-        temp = '%s N -% d' % aaa, prev_code
+        temp = '%s N -% d' % (aaa, prev_code)
         return temp
 
 def gen_ev_str(dup_code, prev_code, hex_arr):
@@ -72,8 +72,18 @@ def gen_ev_str(dup_code, prev_code, hex_arr):
         return '[!]'
     if dup_code >= 0:
         return '[+]'
-    
+
+def safe_chr(foo):
+    if (0x0 <= foo) and (foo < 0x20):
+        return '_'
+    elif (0x7F <= foo):
+        return '_'
+    else:
+        return chr(foo)
+
 # todo : csv write order is strange curently, need to fix asap.
+
+
 
 class log_engine(Thread):
     def __init__(self, filename = gen_logname(), duplicate_kill = 2, echo = True):
@@ -98,6 +108,7 @@ class log_engine(Thread):
 
     def run(self):
         while True:
+            time.sleep(0.0001)
             if self.__lock == False:
                 if self.queue.empty() == False:
                     self.prog()
@@ -108,28 +119,33 @@ class log_engine(Thread):
         t = -1
         for i in range (0, 100):
             if self.queue.empty() == False:
-                print('%d - exit failed' % i)
+                print('%d - exit failed' % (i))
                 time.sleep(0.1)
             else:
                 t = 0
+                break
         if t is -1:
             print("log_engine is busy")
-            self.__exit = True
+        self.__exit = True
+            
 
 
     def prog(self):
-        if self.queue.empty() == False:
+        if self.queue.empty() == True:
             return
         temp = self.queue.get()
+        #print(temp[3])
         temp_hex = "".join("%02x " % b for b in temp[3])
         dup = int(-1)
         # for count n - 1 blahblah
         dup_sub = int(0)
         for a in reversed (range (0, self.dup_val)):
             dup_sub += 1
-            if len(self.dup_list) >= a:
+            #print('a : %d' % (a)
+            #fprint(' len duplist : %d' % len(self.dup_list))
+            if len(self.dup_list) <= a:
                 continue
-            if (self.dup_list[a] == temp_hex):
+            elif (self.dup_list[a] == temp_hex):
                 dup = a
                 break
         
@@ -157,16 +173,16 @@ class log_engine(Thread):
     def log_write (self, ev, timegap, desc, hex_bytes):
         temp = str()
         size = len(hex_bytes)
-        temp_size = '%d(% 2x)' % size, size
-        temp_ascii = "".join("%c" % b for b in hex_bytes)
-        temp_hex = "".join("%02x " % b for b in hex_bytes)
-        temp = '%s,%s,%d,%s,%s\n' % ev, temp_size ,timegap, desc, temp_hex, temp_ascii 
+        temp_size = '%d(% 2x)' % (size, size)
+        temp_ascii = "".join(safe_chr(b) for b in hex_bytes)
+        temp_hex = "".join("%02xh" % b for b in hex_bytes)
+        temp = '%s,%s,%d,%s,%s,%s\n' % (ev, temp_size ,timegap, desc, temp_hex, temp_ascii )
         self.file.write(temp)
 
     def log_echo (self, ev, timegap, desc, hex_bytes):
         size = len(hex_bytes)
         # 3+3+5+24+6+2 = 43
-        temp_front = '% 3s% 3dBytes% 24s% 6dms' % ev, size
+        temp_front = '% 3s% 3dBytes% 24s% 6dms' % (ev, size, desc, timegap)
         t = size//16
         k = size%16
         if k > 0:
@@ -179,13 +195,13 @@ class log_engine(Thread):
             else:
                 d = (size-(i*16))
 
-            temp_ascii  = "".join(chr(b) for b in hex_bytes[i*16:i*16+d])
+            temp_ascii  = "".join(safe_chr(b) for b in hex_bytes[i*16:i*16+d])
             temp_hex    = "".join(" %02x" % b for b in hex_bytes[i*16:i*16+d])
             # need to fill padding reversely. need to fix later.
             if i is 0:
-                temp = '% 43s % 24s % 8s\n' % temp_front, temp_hex, temp_ascii
+                temp = '% 43s %-48s %-16s\n' % (temp_front, temp_hex, temp_ascii)
             else:
-                temp = temp + '% 43s % 24s % 8s\n' % blank, temp_hex, temp_ascii
+                temp = temp + '% 43s %-48s %-16s\n' % (blank, temp_hex, temp_ascii)
         print(temp, end='')
 
     def __del__(self):
