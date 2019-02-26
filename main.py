@@ -70,8 +70,8 @@ class interprerter:
 # todo : csv write order is strange curently, need to fix asap.
 
 
-class csv_write(Thread):
-    def __init__(self, filename = app.gen_logname(), duplicate_kill = 1, echo = True):
+class log_engine(Thread):
+    def __init__(self, filename = self.gen_logname(), duplicate_kill = 2, echo = True):
         if not os.path.exists('log'):
             os.makedirs('log')
         temp = './log/'
@@ -82,10 +82,13 @@ class csv_write(Thread):
         self.file.write('Ev,Len,Time Gap,Description,hex,ASCII')
         self.__lock = False
         self.__exit = False
+        self.echo_enable = False
         self.queue = queue.Queue()
         # dup_list should contain hex->str lized string
         self.dup_list = []
         self.dup_val = duplicate_kill
+        if echo == True:
+            self.echo_enable = True
         Thread.__init__(self)
 
     def run(self):
@@ -95,6 +98,18 @@ class csv_write(Thread):
                     self.prog()
             if self.__exit == True:
                 break
+
+    def exit(self):
+        t = -1
+        for i in range (0, 100):
+            if self.queue.empty() == False:
+                time.sleep(0.1)
+            else:
+                t = 0
+        if t is -1:
+            print("log_engine is busy")
+            self.__exit = True
+
 
     def prog(self):
         if self.queue.empty() == False:
@@ -116,34 +131,69 @@ class csv_write(Thread):
         self.dup_list.append(temp_hex)
         temp_desc = interprerter.gen_description(dup, dup_sub)
         temp_ev = interprerter.gen_ev_str(dup,dup_sub, False)
-        log_write(temp_ev, temp_desc, temp[2], temp[3])
-        
+        log_write(temp_ev, temp[1] ,temp_desc, temp[3])
+        log_echo(temp_ev, temp[1] ,temp_desc, temp[3])
 
     def call(self, ev, desc, timegap, hex_bytes):
         while self.__lock == True:
+            print("log_engine lock issue")
         # this should be fix to mutex
         self.__lock = True:
         temp = []
         temp.append(ev)
-        temp.append(desc)
         temp.append(timegap)
+        temp.append(desc)
         temp.append(hex_bytes)
         self.queue.put(temp)
         self.__lock = False:
 
-
     def log_write (self, ev, timegap, desc, hex_bytes):
         temp = str()
         size = len(hex_bytes)
-        temp_ascii = "".join("%c" % b for b in hex)
-        temp_hex = "".join("%02x " % b for b in hex)
-        temp = '%s,%s,%d,%s,%s\n' % ev, timegap, desc, temp_hex, temp_ascii 
+        temp_size = '%d(% 2x)' % size, size
+        temp_ascii = "".join("%c" % b for b in hex_bytes)
+        temp_hex = "".join("%02x " % b for b in hex_bytes)
+        temp = '%s,%s,%d,%s,%s\n' % ev, temp_size ,timegap, desc, temp_hex, temp_ascii 
         self.file.write(temp)
-    def echo_print (self, ev, timegap, desc, hex_bytes)
+
+    def log_echo (self, ev, timegap, desc, hex_bytes):
+        size = len(hex_bytes)
+        # 3+3+5+24+6+2 = 43
+        temp_front = '% 3s% 3dBytes% 24s% 6dms' % ev, size
+        t = size//16
+        k = size%16
+        if k > 0:
+            t += 1
+        temp = ''
+        blank = ' '
+        for in i range (0, t):
+            if (i+1)*16 <= size:
+                d = 16
+            else:
+                d = (size-(i*16))
+
+            temp_ascii  = "".join(chr(b) for b in hex_bytes[i*16:i*16+d])
+            temp_hex    = "".join(" %02x" % b for b in hex_bytes[i*16:i*16+d])
+            # need to fill padding reversely. need to fix later.
+            if i is 0:
+                temp = '% 43s % 24s % 8s\n' % temp_front, temp_hex, temp_ascii
+            else:
+                temp = temp + '% 43s % 24s % 8s\n' % blank, temp_hex, temp_ascii
+        print(temp, end='')
+
+    def gen_logname(self, prefix = "dump+", endfix = ".csv"):
+        temp = str()
+        temp += prefix
+        now = datetime.datetime.now()
+        temp += now.strftime("%Y-%m-%d-%H-%M")
+        temp += endfix
+        return temp
+
     def __del__(self):
         file.close()
 
-class app:
+
+class app(Thread):
     def __init__(self, port_path, hw485io = False, analyze_log = False, print_log = False):
         self.ser = serial.Serial(
             port=port_path,
@@ -157,7 +207,7 @@ class app:
         self.policy_rtscts = False
         self.policy_logger = False
         self.policy_printout = False
-
+        self.dt = getmstime()
         if hw485io is True:
             self.policy_logger = True
             self.enable_native_rs485_io()
@@ -166,25 +216,16 @@ class app:
             self.policy_logger = True
             if print_log is True:
                 self.policy_printout = True
-            self.enable_logger()
+            # log_engine should be run with thread tech
+            # referenced way to do article by https://bbolmin.tistory.com/164
+            self.logger = log_engine(duplicate_kill=2, echo = print_log)
+            self.logger.start()
+            print("log_engine enabled")
+            time.sleep(0.1)
     
     def __del__(self):
         self.ser.close()
         self.log.close()
-
-    def flag_routine(self):
-
-    def gen_logname(self, prefix = "dump+", endfix = ".csv"):
-        temp = str()
-        temp += prefix
-        now = datetime.datetime.now()
-        temp += now.strftime("%Y-%m-%d-%H-%M")
-        temp += endfix
-        return temp
-            
-    def enable_logger(self):
-        
-
 
     def enable_native_rs485_io(self):
         i = int(0)
@@ -213,11 +254,19 @@ class app:
             temp += ch
         return temp
 
-    def interpreter_packet(self, packet):
+    def basic_work(self)
+        a = program.read_packet()
+        if len(a) != 0:
+                dy = getmstime()
+                __timegap = dy-self.dt
+                if self.policy_logger == True:
+                    self.logger.call(ev=0, desc=0, timegap=__timegap, )
+                self.dt = dy
 
 
-        return 0
-
+    def run(self, packet):
+        if self.policy_logger == True:
+            self.logger.call(ev=0, desc=0, )
         
 def getmstime():
     return int(round(time.time() * 1000))
