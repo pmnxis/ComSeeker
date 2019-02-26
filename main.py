@@ -175,14 +175,14 @@ class log_engine(Thread):
         size = len(hex_bytes)
         temp_size = '%d(% 2x)' % (size, size)
         temp_ascii = "".join(safe_chr(b) for b in hex_bytes)
-        temp_hex = "".join("%02xh" % b for b in hex_bytes)
+        temp_hex = "".join("%02x " % b for b in hex_bytes)
         temp = '%s,%s,%d,%s,%s,%s\n' % (ev, temp_size ,timegap, desc, temp_hex, temp_ascii )
         self.file.write(temp)
 
     def log_echo (self, ev, timegap, desc, hex_bytes):
         size = len(hex_bytes)
-        # 3+3+5+24+6+2 = 43
-        temp_front = '% 3s% 3dBytes% 24s% 6dms' % (ev, size, desc, timegap)
+        # 3+3+5+24+6+2 = 43 , 2+2+1
+        temp_front = '% 3s% 3dBytes(%02x)% 24s% 6dms' % (ev, size, size, desc, timegap)
         t = size//16
         k = size%16
         if k > 0:
@@ -199,9 +199,9 @@ class log_engine(Thread):
             temp_hex    = "".join(" %02x" % b for b in hex_bytes[i*16:i*16+d])
             # need to fill padding reversely. need to fix later.
             if i is 0:
-                temp = '% 43s %-48s %-16s\n' % (temp_front, temp_hex, temp_ascii)
+                temp = '% 48s %-48s %-16s\n' % (temp_front, temp_hex, temp_ascii)
             else:
-                temp = temp + '% 43s %-48s %-16s\n' % (blank, temp_hex, temp_ascii)
+                temp = temp + '% 48s %-48s %-16s\n' % (blank, temp_hex, temp_ascii)
         print(temp, end='')
 
     def __del__(self):
@@ -234,7 +234,7 @@ class app(Thread):
                 self.policy_printout = True
             # log_engine should be run with thread tech
             # referenced way to do article by https://bbolmin.tistory.com/164
-            self.logger = log_engine(duplicate_kill=2, echo = print_log)
+            self.logger = log_engine(duplicate_kill=8, echo = print_log)
             self.logger.start()
             print("log_engine enabled")
             time.sleep(0.1)
