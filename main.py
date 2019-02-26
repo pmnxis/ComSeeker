@@ -42,6 +42,10 @@ class pkt_src(Enum):
     RX = 1,
     TX = 2
 
+        
+def getmstime():
+    return int(round(time.time() * 1000))
+
 
 class interprerter:
     self.pkt_src_str = [
@@ -207,6 +211,7 @@ class app(Thread):
         self.policy_rtscts = False
         self.policy_logger = False
         self.policy_printout = False
+        self.__exit = False
         self.dt = getmstime()
         if hw485io is True:
             self.policy_logger = True
@@ -223,9 +228,20 @@ class app(Thread):
             print("log_engine enabled")
             time.sleep(0.1)
     
+    def run(self):
+        whlie True:
+            self.basic_work()
+            if self.__exit is True:
+                break
+
     def __del__(self):
         self.ser.close()
-        self.log.close()
+        if self.policy_logger is True:
+            self.logger.exit()
+
+    def exit(self):
+        self.__exit = True
+
 
     def enable_native_rs485_io(self):
         i = int(0)
@@ -267,49 +283,22 @@ class app(Thread):
     def run(self, packet):
         if self.policy_logger == True:
             self.logger.call(ev=0, desc=0, )
-        
-def getmstime():
-    return int(round(time.time() * 1000))
 
 
 
 def main():
-    program = app('/dev/ttyS1')
-    dt = getmstime()
-    hex_string = str('_______')
+    # def __init__(self, port_path, hw485io = False, analyze_log = False, print_log = False):
+    program = app(port_path = '/dev/ttyS1', hw485io=False, analyze_log=True, print_log=True)
+    program.start()
+    while True:
+        key = input('')
+        if key = 'q':
+            break
+    program.exit()
+
+
 # this function for logging data
     
 
-    while 1:
-        
-        a = program.read_packet()
-        if len(a) != 0:
-            hex_string_bak = hex_string
-            hex_string = "".join(" %02x" % b for b in a)
-            if (hex_string != hex_string_bak):
-                dy = getmstime()
-                print('[+]% 6d ms Gap : ' % (dy - dt), end='')
-                dt = dy
-                print(hex_string)
-            else:
-                dy = getmstime()
-                print('[#]% 6d ms after repeat : ' % (dy - dt), end='\n')
-                dt = dy
-                
-            
-
+# for __main__()
 main()
-
-'''
-# ser.open()
-#ser.write(lcd_print0)
-time.sleep(0.007)
-#ser.write(lcd_print1)
-time.sleep(0.340)
-ser.write(lcd_print2)
-time.sleep(0.9)
-ser.write(lcd_print3)
-time.sleep(0.1)
-ser.write(lcd_test)
-ser.close()
-'''
