@@ -75,7 +75,7 @@ def safe_chr(foo):
     else:
         return chr(foo)
 
-class log_engine(Thread):
+class analyzer(Thread):
     def __init__(self, filename = gen_logname(), duplicate_kill = 2, echo = True):
         if not os.path.exists('log'):
             os.makedirs('log')
@@ -121,8 +121,6 @@ class log_engine(Thread):
             print("log_engine is busy")
         self.__exit = True
             
-
-
     def prog(self):
         if self.queue.empty() == True:
             return
@@ -147,13 +145,17 @@ class log_engine(Thread):
         self.dup_list.append(temp_hex)
         temp_desc = gen_description(dup, dup_sub)
         temp_ev = gen_ev_str(dup,dup_sub, False)
-        self.log_write(temp_ev, temp[1] ,temp_desc, temp[3])
-        self.log_echo(temp_ev, temp[1] ,temp_desc, temp[3])
+        #def call(self, ev, nickname, desc, timegap, hex_bytes):
+        self.log_write(temp_ev, temp[1], temp[2] ,temp_desc, temp[4])
+        self.log_echo(temp_ev, temp[1], temp[2] ,temp_desc, temp[4])
 #(self, port_path, nickname ,hw485io = False, analyze_log = False, print_log = False):
-    def add_monitor(self, port_path, nickname, hw485io = False):
-        idx = self.monitor_num
+    def add_monitor(self, port_path, nickname='', hw485io = False):
         self.monitor_num += 1
-        ele = com_element(parent=self, port_path, nickname, hw485io, analyze_log = True, print_log = True)
+        __nick = nickname
+        if len(__nick) is 0:
+            __nick = port_path
+            __nick = __nick.replace("/dev/", "")
+        ele = com_element(self, port_path, __nick, hw485io = hw485io)
         self.monitor_list.append(ele)
         return ele
 
@@ -178,6 +180,8 @@ class log_engine(Thread):
         self.__lock = True
         temp = []
         temp.append(ev)
+        # added this nickname value later (v2).
+        temp.append(nickname)
         temp.append(timegap)
         temp.append(desc)
         temp.append(hex_bytes)
@@ -221,11 +225,15 @@ class log_engine(Thread):
         print(temp, end='')
 
     def __del__(self):
+        n = len(self.monitor_list)
+        for i in range (0, n):
+            self.monitor_list[i].exit()
+            time.sleep(0.001)
         self.file.close()
 
 
 class com_element(Thread):
-    def __init__(self, port_path, nickname, hw485io = False, analyze_log = False, print_log = False):
+    def __init__(self, parent, port_path, nickname, hw485io = False):
         self.ser = serial.Serial(
             port=port_path,
             baudrate=115200,
@@ -235,25 +243,17 @@ class com_element(Thread):
             timeout=0.001
         )
         self.policy_rtscts = False
-        self.policy_logger = False
-        self.policy_printout = False
         self.__exit = False
         self.nickname = nickname
         self.dt = getmstime()
+        self.parent = parent
         if hw485io is True:
             self.policy_logger = True
             self.enable_native_rs485_io()
 
-        if analyze_log is True:
-            self.policy_logger = True
-            if print_log is True:
-                self.policy_printout = True
-            # log_engine should be run with thread tech
-            # referenced way to do article by https://bbolmin.tistory.com/164
-            self.logger = log_engine(duplicate_kill=8, echo = print_log)
-            self.logger.start()
-            print("log_engine enabled")
-            time.sleep(0.1)
+        # need to alert opend very well to parent thread
+        print("%s (%s) monitor is opend.")
+        time.sleep(0.1)
         Thread.__init__(self)
 
     def run(self):
@@ -264,12 +264,10 @@ class com_element(Thread):
 
     def __del__(self):
         self.ser.close()
-        if self.policy_logger is True:
-            self.logger.exit()
+        # alert closed to thread
 
     def exit(self):
         self.__exit = True
-
 
     def enable_native_rs485_io(self):
         i = int(0)
@@ -299,20 +297,22 @@ class com_element(Thread):
         return temp
 
     def basic_work(self):
+        time.sleep(0.00005)
         a = self.read_packet()
         if len(a) != 0:
             dy = getmstime()
             __timegap = dy-self.dt
-            if self.policy_logger == True:
-                self.logger.call(ev=0, desc=0, timegap=__timegap, hex_bytes=a)
+            self.parent.call(ev=0, nickname=self.nickname, desc=0, timegap=__timegap, hex_bytes=a)
             self.dt = dy
 
 
 def main():
     # def __init__(self, port_path, hw485io = False, analyze_log = False, print_log = False):
-    program = app(port_path = '/dev/ttyS1', hw485io=False, analyze_log=True, print_log=True)
+    #program = app(port_path = '/dev/ttyS1', hw485io=False, analyze_log=True, print_log=True)
+    program = analyzer(duplicate_kill=8)
     program.start()
     while True:
+        time.sleep(0.001)
         key = input('')
         if key is 'q':
             break

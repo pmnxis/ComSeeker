@@ -218,6 +218,7 @@ class app(Thread):
             bytesize=serial.EIGHTBITS,
             timeout=0.001
         )
+
         self.policy_rtscts = False
         self.policy_logger = False
         self.policy_printout = False
@@ -290,91 +291,6 @@ class app(Thread):
                 self.logger.call(ev=0, desc=0, timegap=__timegap, hex_bytes=a)
             self.dt = dy
 
-class
-
-class com_element(Thread):
-    def __init__(self, port_path, nickname ,hw485io = False, analyze_log = False, print_log = False):
-        if len(nickname) is 0:
-            self.nickname = port_path
-        self.ser = serial.Serial(
-            port=port_path,
-            baudrate=115200,
-            parity=serial.PARITY_NONE,
-            stopbits=serial.STOPBITS_ONE,
-            bytesize=serial.EIGHTBITS,
-            timeout=0.001
-        )
-        self.policy_rtscts = False
-        self.policy_logger = False
-        self.policy_printout = False
-        self.__exit = False
-        self.dt = getmstime()
-        if hw485io is True:
-            self.policy_logger = True
-            self.enable_native_rs485_io()
-
-        if analyze_log is True:
-            self.policy_logger = True
-            if print_log is True:
-                self.policy_printout = True
-            # log_engine should be run with thread tech
-            # referenced way to do article by https://bbolmin.tistory.com/164
-            self.logger = log_engine(duplicate_kill=8, echo = print_log)
-            self.logger.start()
-            print("log_engine enabled")
-            time.sleep(0.1)
-        Thread.__init__(self)
-
-    def run(self):
-        while True:
-            self.basic_work()
-            if self.__exit is True:
-                break
-
-    def __del__(self):
-        self.ser.close()
-        if self.policy_logger is True:
-            self.logger.exit()
-
-    def exit(self):
-        self.__exit = True
-
-
-    def enable_native_rs485_io(self):
-        i = int(0)
-        while i < 1:
-            try:
-                self.ser.rs485_mode = serial.rs485.RS485Settings(False,True)
-                print('rs485 mode is accepcpted by ioctl')
-                return 1
-            except ValueError:
-                pass
-                self.ser.rs485_mode = False
-                print('rs485 mode is denied by ioctl or unknown issue. - ValueError')
-                return -1
-            except Exception:
-                pass
-                self.ser.rs485_mode = False
-                print('rs485 mode is denied by ioctl or unknown issue. - Exception')
-                return -2
-
-    def read_packet(self):
-        temp = []
-        while 1:
-            ch = self.ser.read()
-            if len(ch) == 0:
-                break
-            temp += ch
-        return temp
-
-    def basic_work(self):
-        a = self.read_packet()
-        if len(a) != 0:
-            dy = getmstime()
-            __timegap = dy-self.dt
-            if self.policy_logger == True:
-                self.logger.call(ev=0, desc=0, timegap=__timegap, hex_bytes=a)
-            self.dt = dy
 
 
 
