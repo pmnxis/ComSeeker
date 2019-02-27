@@ -151,13 +151,25 @@ class log_engine(Thread):
         self.log_echo(temp_ev, temp[1] ,temp_desc, temp[3])
 #(self, port_path, nickname ,hw485io = False, analyze_log = False, print_log = False):
     def add_monitor(self, port_path, nickname, hw485io = False):
-'''
-def __init__(self, port_path, nickname, hw485io = False, analyze_log = False, print_log = False):
-    program = app(port_path = '/dev/ttyS1', hw485io=False, analyze_log=True, print_log=True)
-    program.start()
-'''    
         idx = self.monitor_num
-        self.monitor_list.append(com_element(port_path, nickname, hw485io, analyze_log = True, print_log = True))
+        self.monitor_num += 1
+        ele = com_element(parent=self, port_path, nickname, hw485io, analyze_log = True, print_log = True)
+        self.monitor_list.append(ele)
+        return ele
+
+    def start_monitor(self, num):
+        if num >= len(self.monitor_list):
+            print('no such as num %d monitor' % num)
+            return -1
+        self.monitor_list[num].start()
+        return 0
+    
+    def kill_monitor(self, num):
+        if num >= len(self.monitor_list):
+            print('no such as num %d monitor' % num)
+            return -1
+        self.monitor_list[num].exit()
+        return 0
 
     def call(self, ev, nickname, desc, timegap, hex_bytes):
         while self.__lock == True:
@@ -184,6 +196,8 @@ def __init__(self, port_path, nickname, hw485io = False, analyze_log = False, pr
     def log_echo (self, ev, nickname, timegap, desc, hex_bytes):
         size = len(hex_bytes)
         # 3+3+5+24+6+2 = 43 , 2+2+1
+        # this should be fix later
+        print ('\n'+nickname)
         temp_front = '% 3s% 3dBytes(%02x)% 24s% 6dms' % (ev, size, size, desc, timegap)
         t = size//16
         k = size%16
