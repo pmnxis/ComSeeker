@@ -13,12 +13,6 @@ else:
 from enum import Enum
 from threading import Thread
 
-lcd_print0 =    b"\x28\x02\x10\xf1\x64"
-lcd_print1 =    b"\x28\x02\x10\x64\xff\xff\x3b\x5c"
-lcd_print2 =    b"\x29\x03\xa1\x00\x00\x00\x00\x1e\x28"
-lcd_print3 =    b"\x28\x03\x91\x64\x00\x00\x00\xa3\x06\x01\x00\x00\x00\x01\x1f\x00\x00\x00\x00\x00\x00\x10\x00\x10\x00\x00\x00\x01\x00\x02\x00\x00\x00\x01\x01\x01\x00\x00\x00\x04\x00\x00\x00\x20\x20\x20\x20\x68\x30"
-lcd_test =      b"\x28\x03\x91\x64\x00\x00\x00\xA3\x06\x01\x00\x00\x00\x01\x3D\x00\x00\x00\x00\x03\x00\x08\x00\x09\x00\x00\x00\x00\x00\x02\x00\x00\x00\x01\x01\x03\x00\x0D\x00\x22\x00\x00\x00\x5C\x46\x45\x30\x30\x32\x74\x68\x69\x73\x20\x69\x73\x20\x74\x65\x73\x74\x20\x6D\x65\x73\x73\x61\x67\x65\x20\x68\x65\x79\x20\x61\x20\x20\xF7\x57\x28\x03\x5F\xB1"
-
 #if __name__ == "__main__"
 
 class pkt_start(Enum):
@@ -81,10 +75,6 @@ def safe_chr(foo):
     else:
         return chr(foo)
 
-# todo : csv write order is strange curently, need to fix asap.
-
-
-
 class log_engine(Thread):
     def __init__(self, filename = gen_logname(), duplicate_kill = 2, echo = True):
         if not os.path.exists('log'):
@@ -99,6 +89,9 @@ class log_engine(Thread):
         self.__exit = False
         self.echo_enable = False
         self.queue = queue.Queue()
+        self.monitor_num = 0
+        self.monitor_list = []
+        self.monitor_names = []
         # dup_list should contain hex->str lized string
         self.dup_list = []
         self.dup_val = duplicate_kill
@@ -156,8 +149,17 @@ class log_engine(Thread):
         temp_ev = gen_ev_str(dup,dup_sub, False)
         self.log_write(temp_ev, temp[1] ,temp_desc, temp[3])
         self.log_echo(temp_ev, temp[1] ,temp_desc, temp[3])
+#(self, port_path, nickname ,hw485io = False, analyze_log = False, print_log = False):
+    def add_monitor(self, port_path, nickname, hw485io = False):
+'''
+def __init__(self, port_path, nickname, hw485io = False, analyze_log = False, print_log = False):
+    program = app(port_path = '/dev/ttyS1', hw485io=False, analyze_log=True, print_log=True)
+    program.start()
+'''    
+        idx = self.monitor_num
+        self.monitor_list.append(com_element(port_path, nickname, hw485io, analyze_log = True, print_log = True))
 
-    def call(self, ev, desc, timegap, hex_bytes):
+    def call(self, ev, nickname, desc, timegap, hex_bytes):
         while self.__lock == True:
             print("log_engine lock issue")
         # this should be fix to mutex
@@ -170,7 +172,7 @@ class log_engine(Thread):
         self.queue.put(temp)
         self.__lock = False
 
-    def log_write (self, ev, timegap, desc, hex_bytes):
+    def log_write (self, ev, nickname, timegap, desc, hex_bytes):
         temp = str()
         size = len(hex_bytes)
         temp_size = '%d(% 2x)' % (size, size)
@@ -179,7 +181,7 @@ class log_engine(Thread):
         temp = '%s,%s,%d,%s,%s,%s\n' % (ev, temp_size ,timegap, desc, temp_hex, temp_ascii )
         self.file.write(temp)
 
-    def log_echo (self, ev, timegap, desc, hex_bytes):
+    def log_echo (self, ev, nickname, timegap, desc, hex_bytes):
         size = len(hex_bytes)
         # 3+3+5+24+6+2 = 43 , 2+2+1
         temp_front = '% 3s% 3dBytes(%02x)% 24s% 6dms' % (ev, size, size, desc, timegap)
@@ -208,94 +210,8 @@ class log_engine(Thread):
         self.file.close()
 
 
-class app(Thread):
-    def __init__(self, port_path, hw485io = False, analyze_log = False, print_log = False):
-        self.ser = serial.Serial(
-            port=port_path,
-            baudrate=115200,
-            parity=serial.PARITY_NONE,
-            stopbits=serial.STOPBITS_ONE,
-            bytesize=serial.EIGHTBITS,
-            timeout=0.001
-        )
-        self.policy_rtscts = False
-        self.policy_logger = False
-        self.policy_printout = False
-        self.__exit = False
-        self.dt = getmstime()
-        if hw485io is True:
-            self.policy_logger = True
-            self.enable_native_rs485_io()
-
-        if analyze_log is True:
-            self.policy_logger = True
-            if print_log is True:
-                self.policy_printout = True
-            # log_engine should be run with thread tech
-            # referenced way to do article by https://bbolmin.tistory.com/164
-            self.logger = log_engine(duplicate_kill=8, echo = print_log)
-            self.logger.start()
-            print("log_engine enabled")
-            time.sleep(0.1)
-        Thread.__init__(self)
-
-    def run(self):
-        while True:
-            self.basic_work()
-            if self.__exit is True:
-                break
-
-    def __del__(self):
-        self.ser.close()
-        if self.policy_logger is True:
-            self.logger.exit()
-
-    def exit(self):
-        self.__exit = True
-
-
-    def enable_native_rs485_io(self):
-        i = int(0)
-        while i < 1:
-            try:
-                self.ser.rs485_mode = serial.rs485.RS485Settings(False,True)
-                print('rs485 mode is accepcpted by ioctl')
-                return 1
-            except ValueError:
-                pass
-                self.ser.rs485_mode = False
-                print('rs485 mode is denied by ioctl or unknown issue. - ValueError')
-                return -1
-            except Exception:
-                pass
-                self.ser.rs485_mode = False
-                print('rs485 mode is denied by ioctl or unknown issue. - Exception')
-                return -2
-
-    def read_packet(self):
-        temp = []
-        while 1:
-            ch = self.ser.read()
-            if len(ch) == 0:
-                break
-            temp += ch
-        return temp
-
-    def basic_work(self):
-        a = self.read_packet()
-        if len(a) != 0:
-            dy = getmstime()
-            __timegap = dy-self.dt
-            if self.policy_logger == True:
-                self.logger.call(ev=0, desc=0, timegap=__timegap, hex_bytes=a)
-            self.dt = dy
-
-class
-
 class com_element(Thread):
-    def __init__(self, port_path, nickname ,hw485io = False, analyze_log = False, print_log = False):
-        if len(nickname) is 0:
-            self.nickname = port_path
+    def __init__(self, port_path, nickname, hw485io = False, analyze_log = False, print_log = False):
         self.ser = serial.Serial(
             port=port_path,
             baudrate=115200,
@@ -308,6 +224,7 @@ class com_element(Thread):
         self.policy_logger = False
         self.policy_printout = False
         self.__exit = False
+        self.nickname = nickname
         self.dt = getmstime()
         if hw485io is True:
             self.policy_logger = True
@@ -375,8 +292,6 @@ class com_element(Thread):
             if self.policy_logger == True:
                 self.logger.call(ev=0, desc=0, timegap=__timegap, hex_bytes=a)
             self.dt = dy
-
-
 
 
 def main():
