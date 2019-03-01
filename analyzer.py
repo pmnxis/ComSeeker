@@ -57,7 +57,7 @@ class analyzer(Thread):
         self.file = open(temp, 'w')
         self.file.write(filename)
         self.file.write('\n')
-        self.file.write('Ev,Len,Time Gap,Description,hex,ASCII')
+        self.file.write('Ev,Nick,Len,Time Gap,Description,hex,ASCII\n')
         self.__lock = False
         self.__exit = False
         self.echo_enable = False
@@ -319,8 +319,11 @@ def main():
     # def __init__(self, port_path, hw485io = False, analyze_log = False, print_log = False):
     #program = app(port_path = '/dev/ttyS1', hw485io=False, analyze_log=True, print_log=True)
     program = analyzer(duplicate_kill=30)
-    program.add_monitor('/dev/ttyUSB0', nickname='TX', color='\033[104m')
-    program.add_monitor('/dev/ttyUSB1', nickname='RX', color='\033[100m')
+    #program.add_monitor('/dev/ttyUSB0', nickname='TX', color='\033[104m')
+    #program.add_monitor('/dev/ttyUSB1', nickname='RX', color='\033[100m')
+    program.add_monitor('/dev/ttyS1', nickname='TX', color='\033[104m')
+    program.add_monitor('/dev/ttyS2', nickname='RX', color='\033[100m')
+
     program.start()
     while True:
         time.sleep(0.001)
