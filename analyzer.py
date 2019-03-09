@@ -55,7 +55,7 @@ class analyzer(Thread):
         temp = './log/'
         temp += filename
         self.file = open(temp, 'w')
-        self.file.write(filename)
+        #self.file.write(filename)
         self.file.write('\n')
         self.file.write('Ev,Nick,Len,Time Gap,Description,hex,ASCII\n')
         self.__lock = False
@@ -66,6 +66,7 @@ class analyzer(Thread):
         self.monitor_list = []
         self.monitor_names = []
         self.monitor_ready = 0
+        self.dt = getmstime()
         # dup_list should contain hex->str lized string
         self.dup_list = []
         self.dup_val = duplicate_kill
@@ -170,7 +171,10 @@ class analyzer(Thread):
     def slave_close_post(self, idx):
         self.monitor_ready -= 1
 
-    def call(self, ev, nickname, desc, timegap, hex_bytes, color=''):
+    def call(self, ev, nickname, desc, time, hex_bytes, color=''):
+                    #__timegap = dy-self.dt
+        timegap = time - self.dt
+        self.dt = time
         while self.__lock == True:
             print("log_engine lock issue")
         # this should be fix to mutex
@@ -309,10 +313,10 @@ class com_element(Thread):
         a = self.read_packet()
         if len(a) != 0:
             dy = getmstime()
-            __timegap = dy-self.dt
+            #__timegap = dy-self.dt
             
-            self.parent.call(ev=0, nickname=self.nickname, desc=0, timegap=__timegap, hex_bytes=a, color=self.color)
-            self.dt = dy
+            self.parent.call(ev=0, nickname=self.nickname, desc=0, time=dy, hex_bytes=a, color=self.color)
+            #self.dt = dy
 
 
 def main():
