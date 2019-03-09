@@ -47,6 +47,14 @@ In def main()
 fix first parameter to your UART device path.
 
 
+Comment
+---------------------------
+Python 3 is running well with trash code.
+And I used this for my own purpose(analyzing something).
+Anyway code is very dirty now. And I am not good at python
+I hope any claim for this script.
+
+
 Writer
 ---------------------------
 ### contacts : pmnxis@gmail.com
